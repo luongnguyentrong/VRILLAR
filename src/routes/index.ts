@@ -6,7 +6,7 @@ import raceResults from './race-results/';
 
 const router = Router();
 
-router.use(`/race-results`, raceResults);
+router.use(`/years`, raceResults);
 
 router.use(pageRoot);
 router.use(page404);
