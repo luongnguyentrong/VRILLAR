@@ -1,9 +1,9 @@
 import { Router } from 'express';
 
-import { login } from 'controllers/race-results/get';
+import { getRaceResults } from 'controllers/race-results/get';
 
 const router = Router();
 
-router.get('/', login);
+router.get('/:year/:filter', getRaceResults);
 
 export default router;

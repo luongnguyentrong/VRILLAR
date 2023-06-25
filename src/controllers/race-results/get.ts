@@ -1,46 +1,116 @@
 import { Request, Response, NextFunction } from 'express';
 import { getRepository } from 'typeorm';
 
-import { Role } from 'orm/entities/users/types';
-import { User } from 'orm/entities/users/User';
-import { JwtPayload } from 'types/JwtPayload';
-import { createJwtToken } from 'utils/createJwtToken';
-import { CustomError } from 'utils/response/custom-error/CustomError';
+import { Race } from 'orm/entities/races/Race';
+import { Ranking } from 'orm/entities/races/Ranking';
+import axios from 'axios';
+import { GetDriversURL, GetRacesURL, GetTeamsURL } from './api'
+import * as cheerio from 'cheerio';
+import { tableToJson, output } from 'utils/cheerio'
 
-export const login = async (req: Request, res: Response, next: NextFunction) => {
-  const { email, password } = req.body;
+function get_url(filter: string, year: string, code?: string) {
+    let url: string
+    if (filter === "races")
+        url = GetRacesURL(year, code)
+    else if (filter === "drivers")
+        url = GetDriversURL(year, code)
+    else
+        url = GetTeamsURL(year, code)
 
-  const userRepository = getRepository(User);
-  try {
-    const user = await userRepository.findOne({ where: { email } });
+    return url
+}
 
-    if (!user) {
-      const customError = new CustomError(404, 'General', 'Not Found', ['Incorrect email or password']);
-      return next(customError);
-    }
+// get specific race info
+async function get_data(filter: string, year: string, code?: string) {
+    // get url of filter
+    const url = get_url(filter, year, code)
 
-    if (!user.checkIfPasswordMatch(password)) {
-      const customError = new CustomError(404, 'General', 'Not Found', ['Incorrect email or password']);
-      return next(customError);
-    }
+    // fetch html page
+    const response = await axios.get(url);
+    const $ = cheerio.load(response.data);
 
-    const jwtPayload: JwtPayload = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role as Role,
-      created_at: user.created_at,
-    };
+    // parse table 
+    const table_tag = $("body > div.site-wrapper > main > article > div > div.ResultArchiveContainer > div.resultsarchive-wrapper table")
+    const table_data = tableToJson($, table_tag)
+
+    // convert cheerio object to data
+    const result = output($, table_data)
+
+    return result
+}
+
+function isNumeric(value: string) {
+    return /^-?\d+$/.test(value);
+}
+
+interface IRequestParams {
+    year: string
+    filter: string
+}
+
+interface IQuery {
+    code: string
+}
+
+export const getRaceResults = async (req: Request<IRequestParams, {}, {}, IQuery>, res: Response, next: NextFunction) => {
+    // get url params
+    const { year, filter } = req.params
+
+    // get uri query
+    const { code } = req.query;
 
     try {
-      const token = createJwtToken(jwtPayload);
-      res.customSuccess(200, 'Token successfully created.', `Bearer ${token}`);
-    } catch (err) {
-      const customError = new CustomError(400, 'Raw', "Token can't be created", null, err);
-      return next(customError);
+        if (!year || !isNumeric(year) || !['races', 'drivers', 'teams'].includes(filter)) {
+            res.status(400).send("Invalid input")
+        }
+
+        if (code && typeof code !== 'string')
+            res.status(400).send("Invalid input")
+
+        // fetch data and parse into object
+        const data = await get_data(filter, year, code)
+
+        try {
+            // push fetched data to database
+            if (filter === "races") {
+                if (!code) {
+                    // add year value to each row
+                    const new_data = data.map(row => {
+                        row.year = year
+
+                        return row
+                    })
+
+                    const raceRepository = getRepository(Race);
+                    await raceRepository.upsert(new_data, ["race_code", "year"])
+                }
+                else {
+                    // add metadata: year, race_code value to each row
+                    const new_data = data.map(row => {
+                        row.year = year
+                        row.race_code = code
+
+                        row.time = row["time/retired"]
+                        delete row["time/retired"]
+
+                        return row
+                    })
+
+                    const raceRepository = getRepository(Ranking);
+
+                    await raceRepository.upsert(new_data, ["race_code", "driver", "year"])
+                }
+            }
+        } catch (err) {
+            res.status(500).json({ error: 'An error occurred while saving results to database.' });
+            return
+        }
+
+        // return crawled data
+        res.json(data)
+        return
+    } catch (error) {
+        console.error('Error retrieving race results:', error);
+        res.status(500).json({ error: 'An error occurred while retrieving race results.' });
     }
-  } catch (err) {
-    const customError = new CustomError(400, 'Raw', 'Error', null, err);
-    return next(customError);
-  }
 };
