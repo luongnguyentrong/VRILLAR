@@ -1,11 +1,17 @@
+import axios from 'axios';
+
+import * as cheerio from 'cheerio';
+
 import { Request, Response, NextFunction } from 'express';
+
 import { getRepository } from 'typeorm';
 
 import { Race } from 'orm/entities/races/Race';
+
 import { Ranking } from 'orm/entities/races/Ranking';
-import axios from 'axios';
+
 import { GetDriversURL, GetRacesURL, GetTeamsURL } from './api'
-import * as cheerio from 'cheerio';
+
 import { tableToJson, output } from 'utils/cheerio'
 
 function get_url(filter: string, year: string, code?: string) {
