@@ -27,4 +27,4 @@ _Easily set up a local development environment with single command!_
 - clone the repo
 - `npm run docker:dev` 🚀
 
-Visit [localhost:4000](http://localhost:4000/swagger) to see API definitions
+Visit [localhost:4000/swagger](http://localhost:4000/swagger) to see API definitions
