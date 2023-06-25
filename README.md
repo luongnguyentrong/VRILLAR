@@ -5,7 +5,15 @@
 [![prettier][prettier-badge]][prettier-url]
 ![Heisenberg](misc/heisenberg.png)
 
-This is a sample project to crawl data from https://www.formula1.com/, visit /swagger to view API documentation
+This is a simple project to crawl data from https://www.formula1.com/, visit /swagger to view API documentation
+
+**Note**: Results returned from API with filter races are saved to table `Races` and `Rankings` depending of the __code__ query. You can view these tables in PostgresSQL with user account defined in `.env` file.
+
+For example: 
+  - Results from http://localhost:4000/years/2022/races are save to table `Races`
+  - Results from http://localhost:4000/years/2022/races?code=1124%2Fbahrain are save to table `Ranking`
+
+
 
 ## Requirements
 
